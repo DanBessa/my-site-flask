@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload de PDFs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Arraste e solte PDFs para converter</h1>
+        <form id="upload-form" enctype="multipart/form-data">
+            <div id="drop-zone">Arraste ou selecione seus arquivos aqui</div>
+            <input type="file" id="file-input" name="files" multiple hidden>
+            <p id="file-list"></p>
+            <div id="bank-container" style="display: none;">
+                <label for="bank-select">Selecione o banco:</label>
+                <select id="bank-select" name="bank" disabled>
+                    <option value="" selected disabled>Escolha um banco</option>
+                    <option value="itau">Itaú</option>
+                    <option value="bb">Banco do Brasil</option>
+                </select>
+            </div>
+            <div id="pages-container" style="display: none;">
+                <label for="pages-input">Páginas a extrair (ex: 1,2,4-6):</label>
+                <input type="text" id="pages-input" name="pages" placeholder="Digite as páginas">
+            </div>
+            <button type="submit" disabled id="submit-button">Enviar</button>
+        </form>
+        <p id="status"></p>
+    </div>
+    
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const form = document.getElementById('upload-form');
+        const statusText = document.getElementById('status');
+        const fileList = document.getElementById('file-list');
+        const bankSelect = document.getElementById('bank-select');
+        const bankContainer = document.getElementById('bank-container');
+        const pagesInput = document.getElementById('pages-input');
+        const pagesContainer = document.getElementById('pages-container');
+        const submitButton = document.getElementById('submit-button');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dropZone.classList.add('hover');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
+        dropZone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropZone.classList.remove('hover');
+            fileInput.files = event.dataTransfer.files;
+            updateFileList();
+        });
+
+        fileInput.addEventListener('change', updateFileList);
+        bankSelect.addEventListener('change', () => {
+            if (bankSelect.value === 'itau') {
+                pagesContainer.style.display = 'block';
+            } else {
+                pagesContainer.style.display = 'none';
+            }
+            submitButton.disabled = false;
+        });
+
+        function updateFileList() {
+            fileList.innerHTML = '';
+            for (const file of fileInput.files) {
+                fileList.innerHTML += `<p>${file.name}</p>`;
+            }
+            if (fileInput.files.length > 0) {
+                bankContainer.style.display = 'block';
+                bankSelect.disabled = false;
+            }
+        }
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const files = fileInput.files;
+            const selectedBank = bankSelect.value;
+            const selectedPages = pagesInput.value;
+            if (files.length === 0) {
+                statusText.textContent = 'Nenhum arquivo selecionado';
+                return;
+            }
+            if (!selectedBank) {
+                statusText.textContent = 'Por favor, selecione um banco';
+                return;
+            }
+
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('files', file);
+            }
+            formData.append('bank', selectedBank);
+            if (selectedBank === 'itau') {
+                formData.append('pages', selectedPages);
+            }
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    statusText.textContent = 'Arquivos enviados com sucesso!';
+                    data.files.forEach(file => {
+                        const a = document.createElement('a');
+                        a.href = `/download/${file}`;
+                        a.download = file;
+                        a.textContent = `Baixar ${file}`;
+                        document.body.appendChild(a);
+                        document.body.appendChild(document.createElement('br'));
+                    });
+                } else {
+                    statusText.textContent = 'Erro: ' + data.error;
+                }
+            } catch (error) {
+                statusText.textContent = 'Erro na requisição';
+            }
+        });
+    </script>
+</body>
+</html>
